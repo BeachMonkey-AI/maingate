@@ -60,7 +60,7 @@ const FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
 export class GeminiIntentParser implements IntentParser {
   private readonly model;
 
-  constructor(apiKey: string, modelName = "gemini-1.5-flash") {
+  constructor(apiKey: string, modelName = "gemini-flash-latest") {
     const client = new GoogleGenerativeAI(apiKey);
     this.model = client.getGenerativeModel({
       model: modelName,

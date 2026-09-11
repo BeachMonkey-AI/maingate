@@ -30,7 +30,15 @@ export function createChatWebhookHandler(store: DataStore, intentParser: IntentP
       return;
     }
 
-    const intent = await intentParser.parse(text);
+    let intent;
+    try {
+      intent = await intentParser.parse(text);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Intent parsing failed:", err instanceof Error ? err.message : err);
+      res.json({ text: "Something went wrong understanding that — please try again in a moment." });
+      return;
+    }
     if (!intent) {
       res.json({
         text:

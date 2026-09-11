@@ -4,6 +4,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { JsonDataStore } from "../src/data/jsonDataStore.js";
+import type { IntentParser } from "../src/intent/parser.js";
 import { RuleBasedIntentParser } from "../src/intent/ruleBasedIntentParser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,5 +43,17 @@ describe("POST /chat", () => {
     const res = await request(buildApp()).get("/healthz");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  it("responds gracefully instead of crashing when the intent parser throws", async () => {
+    const throwingParser: IntentParser = {
+      parse: async () => {
+        throw new Error("upstream API error");
+      },
+    };
+    const app = createApp(new JsonDataStore(dataFile), throwingParser, {} as NodeJS.ProcessEnv);
+    const res = await request(app).post("/chat").send({ message: { text: "@MainGateBot property 1001" } });
+    expect(res.status).toBe(200);
+    expect(res.body.text).toMatch(/something went wrong/i);
   });
 });
