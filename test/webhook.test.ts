@@ -45,6 +45,18 @@ describe("POST /chat", () => {
     expect(res.body).toEqual({ ok: true });
   });
 
+  it("reads and replies in the Workspace add-on envelope when Chat uses that shape", async () => {
+    const res = await request(buildApp())
+      .post("/chat")
+      .send({ chat: { messagePayload: { message: { text: "@MainGate Show me property 1001" } } } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.hostAppDataAction.chatDataAction.createMessageAction.message.text).toContain(
+      "Madison Apartments",
+    );
+    expect(res.body.text).toBeUndefined();
+  });
+
   it("responds gracefully instead of crashing when the intent parser throws", async () => {
     const throwingParser: IntentParser = {
       parse: async () => {

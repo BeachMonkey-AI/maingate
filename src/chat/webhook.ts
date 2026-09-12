@@ -3,18 +3,27 @@ import { executeIntent } from "../actions/registry.js";
 import type { DataStore } from "../data/store.js";
 import type { IntentParser } from "../intent/parser.js";
 
+interface ChatMessage {
+  text?: string;
+  sender?: { displayName?: string; email?: string };
+}
+
 /**
- * Minimal shape of a Google Chat MESSAGE event we actually use.
- * https://developers.google.com/workspace/chat/api/reference/rest/v1/spaces.messages
+ * Google Chat delivers MESSAGE events in one of two shapes depending on how
+ * the app is registered: a plain Chat app posts the message at the top level,
+ * while an app built as a Workspace add-on nests it under `chat.messagePayload`
+ * and expects its reply wrapped in a hostAppDataAction envelope. This app is
+ * registered as an add-on (that setting is effectively one-way once cleared),
+ * but both shapes are handled so local curl testing stays simple.
  */
 interface ChatEvent {
-  message?: {
-    text?: string;
-    sender?: { displayName?: string; email?: string };
+  message?: ChatMessage;
+  chat?: {
+    messagePayload?: { message?: ChatMessage };
   };
 }
 
-/** Strips the leading @MainGateBot mention Chat includes in the message text. */
+/** Strips the leading @MainGate mention Chat includes in the message text. */
 function stripMention(text: string): string {
   return text.replace(/^@\S+\s*/, "").trim();
 }
@@ -22,11 +31,22 @@ function stripMention(text: string): string {
 export function createChatWebhookHandler(store: DataStore, intentParser: IntentParser) {
   return async function handleChatWebhook(req: Request, res: Response): Promise<void> {
     const event = req.body as ChatEvent;
-    const rawText = event.message?.text ?? "";
-    const text = stripMention(rawText);
+    const isAddOn = Boolean(event.chat);
+    const message = event.chat?.messagePayload?.message ?? event.message;
+    const text = stripMention(message?.text ?? "");
+
+    const reply = (body: string): void => {
+      if (isAddOn) {
+        res.json({
+          hostAppDataAction: { chatDataAction: { createMessageAction: { message: { text: body } } } },
+        });
+      } else {
+        res.json({ text: body });
+      }
+    };
 
     if (!text) {
-      res.json({ text: "I didn't catch a question in that message — try `@MainGateBot show me property 1001`." });
+      reply("I didn't catch a question in that message — try `@MainGate show me property 1001`.");
       return;
     }
 
@@ -36,19 +56,18 @@ export function createChatWebhookHandler(store: DataStore, intentParser: IntentP
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Intent parsing failed:", err instanceof Error ? err.message : err);
-      res.json({ text: "Something went wrong understanding that — please try again in a moment." });
+      reply("Something went wrong understanding that — please try again in a moment.");
       return;
     }
     if (!intent) {
-      res.json({
-        text:
-          "I couldn't match that to something I can look up yet. Try asking about a property " +
+      reply(
+        "I couldn't match that to something I can look up yet. Try asking about a property " +
           "(by name or ID), a property's manager, open maintenance tickets, or a work order's assignee.",
-      });
+      );
       return;
     }
 
     const result = await executeIntent(store, intent);
-    res.json({ text: result.message });
+    reply(result.message);
   };
 }

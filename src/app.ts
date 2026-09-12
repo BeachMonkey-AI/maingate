@@ -14,7 +14,7 @@ export function createApp(store: DataStore, intentParser: IntentParser, env: Nod
 
   app.post(
     "/chat",
-    createChatRequestVerifier(env.GOOGLE_CHAT_PROJECT_NUMBER),
+    createChatRequestVerifier(env.GOOGLE_CHAT_PROJECT_NUMBER, env.GOOGLE_CHAT_AUDIENCE),
     createChatWebhookHandler(store, intentParser),
   );
 
