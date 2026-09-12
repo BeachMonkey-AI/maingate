@@ -4,6 +4,14 @@ export interface Property {
   manager: string;
   status: "Active" | "Inactive";
   address: string;
+  /**
+   * Free-text notes typed by staff, present on some properties and not
+   * others. Deliberately unstructured — codes, locations and contract terms
+   * are written inconsistently, which is the point: this is what the real
+   * export looks like, and reading it is what Gemini is here for.
+   */
+  keyBoxNotes?: string;
+  maintenanceNotes?: string;
 }
 
 export interface WorkOrder {

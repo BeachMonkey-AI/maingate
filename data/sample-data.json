@@ -5,21 +5,111 @@
       "name": "Madison Apartments",
       "manager": "John Smith",
       "status": "Active",
-      "address": "412 Madison St, Springfield"
+      "address": "412 Madison St, Springfield",
+      "keyBoxNotes": "lockbox by front door 4423",
+      "maintenanceNotes": "HVAC - Apex, annual contract, renews Jan. Plumbing is Springfield Plumbing but no contract, just call them when something breaks."
     },
     {
       "propertyId": 1002,
       "name": "Harbor View Condos",
       "manager": "Priya Nair",
       "status": "Active",
-      "address": "88 Harbor Way, Springfield"
+      "address": "88 Harbor Way, Springfield",
+      "keyBoxNotes": "Two boxes: main entry LB#8891 (code 4417) and the pool gate box, code 2200. Pool one sticks, you have to jiggle it.",
+      "maintenanceNotes": "Elevator under contract w/ Apex Elevator Services thru 6/30/27. HVAC warranty expired last year?? need to confirm w/ Priya"
     },
     {
       "propertyId": 1003,
       "name": "Cedar Grove Townhomes",
       "manager": "Ryan Carter",
       "status": "Inactive",
-      "address": "27 Cedar Grove Rd, Springfield"
+      "address": "27 Cedar Grove Rd, Springfield",
+      "maintenanceNotes": "no service contracts on this one. everything T&M"
+    },
+    {
+      "propertyId": 1004,
+      "name": "Riverbend Flats",
+      "manager": "Dana Wu",
+      "status": "Active",
+      "address": "1290 Riverbend Dr, Springfield",
+      "keyBoxNotes": "code 7781"
+    },
+    {
+      "propertyId": 1005,
+      "name": "Oakhurst Manor",
+      "manager": "John Smith",
+      "status": "Active",
+      "address": "55 Oakhurst Ln, Millbrook",
+      "keyBoxNotes": "3 lock boxes on site - #1 front office (2255), #2 maint shed rear of bldg C (2255, same code), #3 roof access. Roof one you have to ask Mike for, it's not written down anywhere.",
+      "maintenanceNotes": "HVAC: Northside Mechanical, PM quarterly, contract # NM-4471, expires 11/1/2026. plumbing - none"
+    },
+    {
+      "propertyId": 1006,
+      "name": "Willow Creek Apartments",
+      "manager": "Priya Nair",
+      "status": "Active",
+      "address": "3401 Willow Creek Pkwy, Millbrook",
+      "keyBoxNotes": "Lockbox is mounted on the gas meter, north side of building A. Code is 3390. There's an older red box right next to it that nobody uses anymore - ignore that one."
+    },
+    {
+      "propertyId": 1007,
+      "name": "Sunset Ridge Duplexes",
+      "manager": "Marcus Bell",
+      "status": "Active",
+      "address": "9 Sunset Ridge, Millbrook",
+      "maintenanceNotes": "plumbing warranty through Springfield Plumbing Co - 5 yr on the 2023 repipe so good until 2028. HVAC units are new, mfr warranty 10yr parts / 2yr labor, install was Aug 2025."
+    },
+    {
+      "propertyId": 1008,
+      "name": "Lakeshore Commons",
+      "manager": "Dana Wu",
+      "status": "Active",
+      "address": "700 Lakeshore Blvd, Springfield",
+      "keyBoxNotes": "LB 9902 - east stairwell. second box at the dumpster corral, same code.",
+      "maintenanceNotes": "Apex does the HVAC here too. Same contract as Madison I think - check with accounting before scheduling anything billable"
+    },
+    {
+      "propertyId": 1009,
+      "name": "Birchwood Terrace",
+      "manager": "Ryan Carter",
+      "status": "Active",
+      "address": "144 Birchwood Ter, Springfield",
+      "keyBoxNotes": "key box code: 1188 / backup box in the electrical room 1188",
+      "maintenanceNotes": "Service agreement w/ ClimateCare Inc, auto-renews unless we cancel 60 days out. Covers HVAC + the boiler. Nothing for plumbing."
+    },
+    {
+      "propertyId": 1010,
+      "name": "Fairfax Court",
+      "manager": "Marcus Bell",
+      "status": "Inactive",
+      "address": "18 Fairfax Ct, Millbrook"
+    },
+    {
+      "propertyId": 1011,
+      "name": "Pinehurst Gardens",
+      "manager": "Priya Nair",
+      "status": "Active",
+      "address": "2255 Pinehurst Ave, Springfield",
+      "keyBoxNotes": "box is behind the sign at the entrance, you have to reach around the back of it. 6624. DO NOT use 6620, that's the old one and it'll jam.",
+      "maintenanceNotes": "HVAC contract lapsed 2/2026, never renewed. plumbing: Springfield Plumbing on call"
+    },
+    {
+      "propertyId": 1012,
+      "name": "Stonegate Village",
+      "manager": "John Smith",
+      "status": "Active",
+      "address": "6 Stonegate Cir, Millbrook",
+      "keyBoxNotes": "two: leasing office (5540) and clubhouse (5541)",
+      "maintenanceNotes": "Elevator: Apex, thru 12/2027. HVAC: Northside, expired?? Ryan was going to look into it and I never heard back"
+    },
+    {
+      "propertyId": 1013,
+      "name": "Ashford Place",
+      "manager": "Dana Wu",
+      "status": "Active",
+      "address": "830 Ashford Pl, Springfield",
+      "keyBoxNotes": "4712",
+      "maintenanceNotes": "everything is under builder warranty until 8/15/2027 - call the GC, not a vendor. GC contact is in the closing binder."
     }
   ],
   "workOrders": [
@@ -54,6 +144,70 @@
       "status": "InProgress",
       "assignedTo": "Ryan Carter",
       "createdAt": "2026-09-08T08:00:00Z"
+    },
+    {
+      "workOrderId": 460,
+      "propertyId": 1005,
+      "description": "Quarterly HVAC PM - all buildings",
+      "status": "Open",
+      "assignedTo": "Northside Mechanical",
+      "createdAt": "2026-09-02T07:45:00Z"
+    },
+    {
+      "workOrderId": 461,
+      "propertyId": 1005,
+      "description": "Roof access lockbox code unknown - need to re-key",
+      "status": "Open",
+      "assignedTo": "Mike Alvarez",
+      "createdAt": "2026-09-09T16:20:00Z"
+    },
+    {
+      "workOrderId": 462,
+      "propertyId": 1006,
+      "description": "Water heater replacement bldg B",
+      "status": "InProgress",
+      "assignedTo": "Springfield Plumbing Co.",
+      "createdAt": "2026-08-28T10:00:00Z"
+    },
+    {
+      "workOrderId": 463,
+      "propertyId": 1008,
+      "description": "Parking lot lights out - east row",
+      "status": "Open",
+      "assignedTo": "Marcus Bell",
+      "createdAt": "2026-09-06T19:10:00Z"
+    },
+    {
+      "workOrderId": 464,
+      "propertyId": 1009,
+      "description": "Boiler making noise, tenant complaint unit 12",
+      "status": "Open",
+      "assignedTo": "ClimateCare Inc",
+      "createdAt": "2026-09-10T08:30:00Z"
+    },
+    {
+      "workOrderId": 465,
+      "propertyId": 1011,
+      "description": "Annual fire inspection follow-up items",
+      "status": "Completed",
+      "assignedTo": "Priya Nair",
+      "createdAt": "2026-07-14T13:00:00Z"
+    },
+    {
+      "workOrderId": 466,
+      "propertyId": 1012,
+      "description": "Elevator annual inspection",
+      "status": "Open",
+      "assignedTo": "Apex Elevator Services",
+      "createdAt": "2026-09-03T09:00:00Z"
+    },
+    {
+      "workOrderId": 467,
+      "propertyId": 1013,
+      "description": "Punch list - drywall cracks in 3 units",
+      "status": "InProgress",
+      "assignedTo": "Dana Wu",
+      "createdAt": "2026-09-07T12:40:00Z"
     }
   ],
   "vendors": [
@@ -68,6 +222,18 @@
       "name": "Apex Elevator Services",
       "phone": "555-010-8842",
       "service": "Elevator maintenance"
+    },
+    {
+      "vendorId": 3,
+      "name": "Northside Mechanical",
+      "phone": "555-010-3390",
+      "service": "HVAC"
+    },
+    {
+      "vendorId": 4,
+      "name": "ClimateCare Inc",
+      "phone": "555-010-7712",
+      "service": "HVAC and boilers"
     }
   ]
 }

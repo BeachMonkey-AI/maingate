@@ -38,8 +38,13 @@ describe("POST /chat", () => {
     expect(res.status).toBe(200);
     expect(res.body.text).toBe("answered: Show me property 1001");
     expect(answerer.lastQuestion).toBe("Show me property 1001");
-    expect(answerer.lastDataset?.properties).toHaveLength(3);
-    expect(answerer.lastDataset?.workOrders).toHaveLength(4);
+    expect(answerer.lastDataset?.properties).toHaveLength(13);
+    expect(answerer.lastDataset?.workOrders).toHaveLength(12);
+    // The free-text staff notes must survive into the prompt — they're the
+    // only place lockbox codes and contract terms exist.
+    expect(answerer.lastDataset?.properties.find((p) => p.propertyId === 1005)?.keyBoxNotes).toContain(
+      "2255",
+    );
   });
 
   it("reads and replies in the Workspace add-on envelope when Chat uses that shape", async () => {
