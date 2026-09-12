@@ -3,57 +3,88 @@ import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { JsonDataStore } from "../src/data/jsonDataStore.js";
-import type { IntentParser } from "../src/intent/parser.js";
-import { RuleBasedIntentParser } from "../src/intent/ruleBasedIntentParser.js";
+import { createDatasetLoader } from "../src/data/dataset.js";
+import type { Answerer } from "../src/gemini/answerer.js";
+import type { OperationalDataset } from "../src/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataFile = path.join(__dirname, "..", "data", "sample-data.json");
 
-function buildApp() {
-  const store = new JsonDataStore(dataFile);
-  return createApp(store, new RuleBasedIntentParser(), {} as NodeJS.ProcessEnv);
+/** Echoes back what it was asked, so tests assert plumbing rather than Gemini's wording. */
+function stubAnswerer(): Answerer & { lastQuestion?: string; lastDataset?: OperationalDataset } {
+  const stub = {
+    lastQuestion: undefined as string | undefined,
+    lastDataset: undefined as OperationalDataset | undefined,
+    async answer(question: string, dataset: OperationalDataset) {
+      stub.lastQuestion = question;
+      stub.lastDataset = dataset;
+      return `answered: ${question}`;
+    },
+  };
+  return stub;
+}
+
+function buildApp(answerer: Answerer) {
+  return createApp(createDatasetLoader(dataFile), answerer, {} as NodeJS.ProcessEnv);
 }
 
 describe("POST /chat", () => {
-  it("answers a property lookup sent the way Google Chat formats it", async () => {
-    const res = await request(buildApp())
+  it("strips the @mention and passes the question plus the full dataset to the answerer", async () => {
+    const answerer = stubAnswerer();
+    const res = await request(buildApp(answerer))
       .post("/chat")
-      .send({ message: { text: "@MainGateBot Show me property 1001" } });
+      .send({ message: { text: "@MainGate Show me property 1001" } });
 
     expect(res.status).toBe(200);
-    expect(res.body.text).toContain("Madison Apartments");
+    expect(res.body.text).toBe("answered: Show me property 1001");
+    expect(answerer.lastQuestion).toBe("Show me property 1001");
+    expect(answerer.lastDataset?.properties).toHaveLength(13);
+    expect(answerer.lastDataset?.workOrders).toHaveLength(12);
+    // The free-text staff notes must survive into the prompt — they're the
+    // only place lockbox codes and contract terms exist.
+    expect(answerer.lastDataset?.properties.find((p) => p.propertyId === 1005)?.keyBoxNotes).toContain(
+      "2255",
+    );
+  });
+
+  it("reads and replies in the Workspace add-on envelope when Chat uses that shape", async () => {
+    const res = await request(buildApp(stubAnswerer()))
+      .post("/chat")
+      .send({ chat: { messagePayload: { message: { text: "@MainGate how many properties?" } } } });
+
+    expect(res.status).toBe(200);
+    expect(res.body.hostAppDataAction.chatDataAction.createMessageAction.message.text).toBe(
+      "answered: how many properties?",
+    );
+    expect(res.body.text).toBeUndefined();
   });
 
   it("responds gracefully to an empty message", async () => {
-    const res = await request(buildApp()).post("/chat").send({ message: { text: "@MainGateBot" } });
+    const res = await request(buildApp(stubAnswerer()))
+      .post("/chat")
+      .send({ message: { text: "@MainGate" } });
+
     expect(res.status).toBe(200);
     expect(res.body.text).toMatch(/didn't catch/i);
   });
 
-  it("responds gracefully when nothing matches an intent", async () => {
-    const res = await request(buildApp())
-      .post("/chat")
-      .send({ message: { text: "@MainGateBot what's the weather like" } });
-    expect(res.status).toBe(200);
-    expect(res.body.text).toMatch(/couldn't match/i);
-  });
-
-  it("exposes a health check", async () => {
-    const res = await request(buildApp()).get("/healthz");
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
-  });
-
-  it("responds gracefully instead of crashing when the intent parser throws", async () => {
-    const throwingParser: IntentParser = {
-      parse: async () => {
+  it("responds gracefully instead of crashing when the answerer throws", async () => {
+    const throwing: Answerer = {
+      answer: async () => {
         throw new Error("upstream API error");
       },
     };
-    const app = createApp(new JsonDataStore(dataFile), throwingParser, {} as NodeJS.ProcessEnv);
-    const res = await request(app).post("/chat").send({ message: { text: "@MainGateBot property 1001" } });
+    const res = await request(buildApp(throwing))
+      .post("/chat")
+      .send({ message: { text: "@MainGate property 1001" } });
+
     expect(res.status).toBe(200);
     expect(res.body.text).toMatch(/something went wrong/i);
+  });
+
+  it("exposes a health check", async () => {
+    const res = await request(buildApp(stubAnswerer())).get("/health");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
   });
 });
