@@ -1,10 +1,30 @@
 import type { Request, Response } from "express";
-import type { OperationalDataset } from "../types.js";
+import {
+  applyKeyBoxCodeChange,
+  describeChange,
+  prepareKeyBoxCodeChange,
+  type PendingChange,
+  type UpdateKeyBoxCodeRequest,
+} from "../actions/updateKeyBoxCode.js";
+import type { DatasetStore } from "../data/dataset.js";
 import type { Answerer } from "../gemini/answerer.js";
+import type { ConversationStore } from "./conversation.js";
+
+/**
+ * Confirmation is matched here rather than asked of the model, so whether a
+ * write happens is never a judgement call. Only an explicit yes saves; the
+ * failure mode is "didn't save", never "saved something unintended".
+ */
+const AFFIRMATIVE = /^(y|yes|yep|yeah|ok|okay|sure|confirm|confirmed|do it|go ahead|save|save it)\b[.!]?$/i;
+const NEGATIVE = /^(n|no|nope|cancel|stop|nevermind|never mind|don't|dont)\b[.!]?$/i;
 
 interface ChatMessage {
   text?: string;
   sender?: { displayName?: string; email?: string };
+}
+
+interface ChatSpace {
+  name?: string;
 }
 
 /**
@@ -17,8 +37,9 @@ interface ChatMessage {
  */
 interface ChatEvent {
   message?: ChatMessage;
+  space?: ChatSpace;
   chat?: {
-    messagePayload?: { message?: ChatMessage };
+    messagePayload?: { message?: ChatMessage; space?: ChatSpace };
   };
 }
 
@@ -28,14 +49,25 @@ function stripMention(text: string): string {
 }
 
 export function createChatWebhookHandler(
-  loadDataset: () => Promise<OperationalDataset>,
+  store: DatasetStore,
   answerer: Answerer,
+  conversations: ConversationStore,
 ) {
+  // The originating request is kept alongside the change so an unconfirmed
+  // reply can be folded in as notes and re-proposed, rather than thrown away.
+  const pending = new Map<string, { change: PendingChange; request: UpdateKeyBoxCodeRequest }>();
+
   return async function handleChatWebhook(req: Request, res: Response): Promise<void> {
     const event = req.body as ChatEvent;
     const isAddOn = Boolean(event.chat);
-    const message = event.chat?.messagePayload?.message ?? event.message;
+    const payload = event.chat?.messagePayload;
+    const message = payload?.message ?? event.message;
+    const space = payload?.space ?? event.space;
     const question = stripMention(message?.text ?? "");
+
+    const sender = message?.sender;
+    const changedBy = sender?.displayName || sender?.email || "unknown user";
+    const threadKey = space?.name ?? sender?.email ?? "default";
 
     const reply = (body: string): void => {
       if (isAddOn) {
@@ -52,9 +84,65 @@ export function createChatWebhookHandler(
       return;
     }
 
+    const finish = (text: string): void => {
+      conversations.record(threadKey, { role: "user", text: question }, { role: "model", text });
+      reply(text);
+    };
+
+    // A change awaiting confirmation short-circuits everything else, so an
+    // unrelated follow-up can't be mistaken for approval.
+    const awaiting = pending.get(threadKey);
+    if (awaiting) {
+      const answer = question.trim();
+
+      if (AFFIRMATIVE.test(answer)) {
+        pending.delete(threadKey);
+        await applyKeyBoxCodeChange(store, awaiting.change);
+        finish(`Saved. ${awaiting.change.summary}.`);
+        return;
+      }
+      if (NEGATIVE.test(answer)) {
+        pending.delete(threadKey);
+        finish("Cancelled — nothing was changed.");
+        return;
+      }
+
+      // Anything else is almost always the notes the user still wanted to add,
+      // so fold it in and re-propose instead of discarding their change.
+      const request = {
+        ...awaiting.request,
+        notes: [awaiting.request.notes, answer].filter(Boolean).join(" "),
+      };
+      const reworked = await prepareKeyBoxCodeChange(store, request, changedBy);
+      if (!reworked.ok) {
+        pending.delete(threadKey);
+        finish(reworked.message);
+        return;
+      }
+      pending.set(threadKey, { change: reworked.change, request });
+      finish(describeChange(reworked.change));
+      return;
+    }
+
     try {
-      const dataset = await loadDataset();
-      reply(await answerer.answer(question, dataset));
+      const outcome = await answerer.answer({
+        question,
+        dataset: await store.get(),
+        history: conversations.history(threadKey),
+      });
+
+      if (outcome.kind === "reply") {
+        finish(outcome.text);
+        return;
+      }
+
+      const prepared = await prepareKeyBoxCodeChange(store, outcome.request, changedBy);
+      if (!prepared.ok) {
+        finish(prepared.message);
+        return;
+      }
+      pending.set(threadKey, { change: prepared.change, request: outcome.request });
+      finish(describeChange(prepared.change));
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Failed to answer:", err instanceof Error ? err.message : err);

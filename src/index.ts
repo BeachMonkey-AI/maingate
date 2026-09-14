@@ -2,7 +2,7 @@ import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
-import { createDatasetLoader } from "./data/dataset.js";
+import { createDatasetStore } from "./data/dataset.js";
 import { GeminiAnswerer } from "./gemini/answerer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +16,7 @@ const dataFile = process.env.DATA_FILE ?? path.join(__dirname, "..", "data", "sa
 const models = process.env.GEMINI_MODELS?.split(",")
   .map((m) => m.trim())
   .filter(Boolean);
-const app = createApp(createDatasetLoader(dataFile), new GeminiAnswerer(apiKey, models));
+const app = createApp(createDatasetStore(dataFile), new GeminiAnswerer(apiKey, models));
 
 const port = Number(process.env.PORT ?? 8080);
 app.listen(port, () => {

@@ -1,11 +1,12 @@
 import express, { type Express } from "express";
+import { createConversationStore } from "./chat/conversation.js";
 import { createChatRequestVerifier } from "./chat/verify.js";
 import { createChatWebhookHandler } from "./chat/webhook.js";
+import type { DatasetStore } from "./data/dataset.js";
 import type { Answerer } from "./gemini/answerer.js";
-import type { OperationalDataset } from "./types.js";
 
 export function createApp(
-  loadDataset: () => Promise<OperationalDataset>,
+  store: DatasetStore,
   answerer: Answerer,
   env: NodeJS.ProcessEnv = process.env,
 ): Express {
@@ -19,7 +20,7 @@ export function createApp(
   app.post(
     "/chat",
     createChatRequestVerifier(env.GOOGLE_CHAT_PROJECT_NUMBER, env.GOOGLE_CHAT_AUDIENCE),
-    createChatWebhookHandler(loadDataset, answerer),
+    createChatWebhookHandler(store, answerer, createConversationStore()),
   );
 
   return app;
