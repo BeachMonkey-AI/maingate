@@ -35,9 +35,16 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Code-like tokens, used to check a replacement didn't take neighbours with it. */
+/**
+ * Code-like tokens, used to check a replacement didn't take neighbours with it.
+ *
+ * Box identifiers are excluded: "main entry LB#8891 (code 4417)" holds one
+ * code, not two. Counting the 8891 made legitimately replacing that code look
+ * like it was deleting a second one, which refused the change every time and
+ * left the user with no wording that could work.
+ */
 function codesIn(text: string): string[] {
-  return text.match(/\d{3,8}/g) ?? [];
+  return text.match(/(?<![#A-Za-z\d])\d{3,8}(?!\d)/g) ?? [];
 }
 
 function removedCodes(before: string, after: string): string[] {
@@ -57,6 +64,26 @@ function removedCodes(before: string, after: string): string[] {
 /** Commas separate fields in the stored record, so they can't appear inside one. */
 function sanitize(value: string): string {
   return value.replace(/[\r\n,]+/g, " ").trim();
+}
+
+const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+
+/**
+ * Strips note text that is just a restatement of what's already recorded.
+ *
+ * The model reliably pads `notes` with whatever it read — the entry being
+ * retired, or the whole existing note — which drags stale codes and duplicated
+ * prose into the new record. Only what the user actually added should survive.
+ */
+function dropEchoes(notes: string, existing: string): string {
+  const haystack = normalize(existing);
+  return notes
+    .split(/(?<=[.;])\s+/)
+    .filter((fragment) => {
+      const candidate = normalize(fragment).replace(/[.;]$/, "");
+      return candidate.length > 0 && !(candidate.length > 8 && haystack.includes(candidate));
+    })
+    .join(" ");
 }
 
 /**
@@ -97,8 +124,22 @@ export async function prepareKeyBoxCodeChange(
     return { ok: false, message: "That location description is too long." };
   }
 
-  const notes = sanitize(request.notes ?? "").slice(0, MAX_FIELD);
   const existing = property.keyBoxNotes ?? "";
+  // The model tends to echo the text being retired into the notes, which would
+  // carry the old code straight back into the new record.
+  const withoutRetired = request.supersedes
+    ? (request.notes ?? "").split(request.supersedes).join(" ")
+    : (request.notes ?? "");
+  // Codes already on record must not reappear in free text: the model rebuilds
+  // fragments of the existing note from memory, so they aren't always exact
+  // echoes, but a code that's already stored is never something the user just
+  // told us. A number they genuinely typed isn't in `existing`, so it survives.
+  const existingCodes = new Set(codesIn(existing));
+  const notes = sanitize(dropEchoes(withoutRetired, existing))
+    .replace(/(?<![#A-Za-z\d])\d{3,8}(?!\d)/g, (token) => (existingCodes.has(token) ? "" : token))
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, MAX_FIELD);
 
   let carriedOver = existing;
   if (request.mode === "replace") {
@@ -127,8 +168,12 @@ export async function prepareKeyBoxCodeChange(
     }
     carriedOver = existing
       .replace(supersedes, "")
-      .replace(/\s*,\s*([.,])/g, "$1") // cutting mid-sentence leaves ", ." behind
+      // Cutting mid-sentence strands punctuation and conjunctions: ", ." or
+      // "Two boxes: and the pool gate".
+      .replace(/\s*,\s*([.,])/g, "$1")
+      .replace(/([:;,]\s*)(and|or)\s+/gi, "$1")
       .replace(/\s{2,}/g, " ")
+      .replace(/^\s*(and|or)\s+/i, "")
       .replace(/^[\s,]+|[\s,]+$/g, "");
   }
 

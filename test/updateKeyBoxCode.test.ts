@@ -94,6 +94,62 @@ describe("preparing a key box change", () => {
     expect(notes).toMatch(/3321, bike store, \d{4}-\d{2}-\d{2}, Kyle Roeter/);
   });
 
+  it("replaces a code whose entry also carries a box identifier", async () => {
+    // "main entry LB#8891 (code 4417)" has two digit runs but only one code.
+    // Treating the LB# identifier as a code made this replacement impossible.
+    const result = await change({
+      propertyId: HARBOR,
+      location: "main entry",
+      code: "4418",
+      mode: "replace",
+      supersedes: "main entry LB#8891 (code 4417)",
+      notes: "Lock needs WD40 it's sticky",
+    });
+
+    expect(result.ok).toBe(true);
+    const notes = await notesFor(HARBOR);
+    expect(notes).not.toContain("4417"); // old code retired
+    expect(notes).toContain("2200"); // pool gate untouched
+    expect(notes).toMatch(/4418, main entry, \d{4}-\d{2}-\d{2}, User 1, Lock needs WD40 it's sticky/);
+  });
+
+  it("keeps the retired code out of the notes, and tidies the prose it cut", async () => {
+    // The model echoes the superseded text back as notes, which would carry
+    // the old code into the very record meant to replace it.
+    const result = await change({
+      propertyId: HARBOR,
+      location: "main entry",
+      code: "4418",
+      mode: "replace",
+      supersedes: "main entry LB#8891 (code 4417)",
+      notes: "main entry LB#8891 (code 4417) Lock needs WD40",
+    });
+
+    expect(result.ok).toBe(true);
+    const notes = await notesFor(HARBOR);
+    expect(notes).not.toContain("4417");
+    expect(notes).toContain("Lock needs WD40");
+    expect(notes).not.toMatch(/Two boxes:\s*and/); // no stranded conjunction
+  });
+
+  it("keeps only what the user actually added when the model pads the notes", async () => {
+    const result = await change({
+      propertyId: HARBOR,
+      location: "main entry",
+      code: "4418",
+      mode: "replace",
+      supersedes: "main entry LB#8891 (code 4417)",
+      // Observed live: the model hands back the rest of the existing note too.
+      notes: "Two boxes: and the pool gate box, code 2200. Pool one sticks, you have to jiggle it. Lock needs WD40, it's sticky",
+    });
+
+    expect(result.ok).toBe(true);
+    const record = (await notesFor(HARBOR))!.split("\n").at(-1)!;
+    expect(record).toContain("Lock needs WD40");
+    expect(record).not.toContain("2200"); // pool gate code not duplicated in
+    expect(record).not.toMatch(/jiggle/i); // existing prose not restated
+  });
+
   it("refuses a replacement whose superseded text isn't actually present", async () => {
     // Otherwise the stale code would silently survive alongside the new one.
     const result = await change({
@@ -166,6 +222,6 @@ describe("preparing a key box change", () => {
     expect(fields).toHaveLength(5);
     expect(fields[2]).toBe(new Date().toISOString().slice(0, 10));
     expect(fields[3]).toBe("Real User");
-    expect(fields[4]).toBe("2001-01-01  Someone Else");
+    expect(fields[4]).toBe("2001-01-01 Someone Else");
   });
 });
