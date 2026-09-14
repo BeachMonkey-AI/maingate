@@ -16,46 +16,70 @@ const SYSTEM_INSTRUCTION = [
   "headings, bullet characters and tables all show up as literal punctuation.",
 ].join(" ");
 
-const RETRY_DELAYS_MS = [500, 1500];
+/**
+ * Tried in order, falling through on 503 "high demand". Any single model can
+ * be congested for long stretches on this API tier, and which one varies:
+ * gemini-flash-latest was down while gemini-3.5-flash served fine, then two
+ * days later exactly the reverse. Retrying one model doesn't help — the
+ * outages outlast any sane backoff — but a different model almost always has
+ * capacity, so failing over beats waiting.
+ */
+const DEFAULT_MODELS = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.5-flash-lite"];
 
 /**
- * Pinned rather than using a `-latest` alias: the alias tracks the newest
- * model, which is also the most contended, and returned sustained 503s
- * ("experiencing high demand") while pinned models served fine.
+ * Per-model budget. The SDK retries 503s internally with backoff before
+ * surfacing the error — left alone, a single congested model burned 90s,
+ * long past the ~30s where Google Chat gives up and shows "not responding".
+ * Capping each attempt keeps the whole chain inside that window.
  */
-const DEFAULT_MODEL = "gemini-3.5-flash";
+const PER_MODEL_TIMEOUT_MS = 8000;
 
 function isTransient(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
-  return /\[(429|500|502|503|504)\s/.test(message);
+  // Timeouts and aborts count: hitting PER_MODEL_TIMEOUT_MS is the normal way
+  // a congested model surfaces here, and it must fall through like a 503.
+  return /\[(429|500|502|503|504)\s/.test(message) || /timeout|aborted|abort/i.test(message);
 }
 
 export class GeminiAnswerer implements Answerer {
-  private readonly model;
+  private readonly models: { name: string; model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]> }[];
+  private preferredIndex = 0;
 
-  constructor(apiKey: string, modelName = DEFAULT_MODEL) {
+  constructor(apiKey: string, modelNames: string[] = DEFAULT_MODELS) {
     const client = new GoogleGenerativeAI(apiKey);
-    this.model = client.getGenerativeModel({
-      model: modelName,
-      systemInstruction: SYSTEM_INSTRUCTION,
-    });
+    this.models = modelNames.map((name) => ({
+      name,
+      model: client.getGenerativeModel(
+        { model: name, systemInstruction: SYSTEM_INSTRUCTION },
+        { timeout: PER_MODEL_TIMEOUT_MS },
+      ),
+    }));
   }
 
   async answer(question: string, dataset: OperationalDataset): Promise<string> {
     const prompt = `DATA:\n${JSON.stringify(dataset)}\n\nQUESTION: ${question}`;
+    let lastError: unknown;
 
-    for (let attempt = 0; ; attempt++) {
+    // Start from whichever model last worked. Congestion lasts hours, so a
+    // fixed order means paying the timeout on every question for the whole
+    // outage — 8s per dead model, on every single request.
+    for (let i = 0; i < this.models.length; i++) {
+      const index = (this.preferredIndex + i) % this.models.length;
+      const { name, model } = this.models[index];
       try {
-        const result = await this.model.generateContent(prompt);
+        const result = await model.generateContent(prompt);
+        this.preferredIndex = index;
         return result.response.text().trim();
       } catch (err) {
-        if (attempt >= RETRY_DELAYS_MS.length || !isTransient(err)) {
+        if (!isTransient(err)) {
           throw err;
         }
+        lastError = err;
         // eslint-disable-next-line no-console
-        console.warn(`Gemini call failed (attempt ${attempt + 1}), retrying:`, err);
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+        console.warn(`${name} unavailable, falling through to next model:`, err instanceof Error ? err.message : err);
       }
     }
+
+    throw lastError;
   }
 }

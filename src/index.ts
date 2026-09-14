@@ -13,7 +13,10 @@ if (!apiKey) {
 }
 
 const dataFile = process.env.DATA_FILE ?? path.join(__dirname, "..", "data", "sample-data.json");
-const app = createApp(createDatasetLoader(dataFile), new GeminiAnswerer(apiKey, process.env.GEMINI_MODEL));
+const models = process.env.GEMINI_MODELS?.split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
+const app = createApp(createDatasetLoader(dataFile), new GeminiAnswerer(apiKey, models));
 
 const port = Number(process.env.PORT ?? 8080);
 app.listen(port, () => {
